@@ -1,4 +1,5 @@
 
+import json
 import os
 import queue
 import sys
@@ -46,6 +47,14 @@ def _apply_window_icon(window: tk.Misc):
                 pass
     except Exception:
         pass
+
+
+def _get_config_path() -> Path:
+    appdata = Path(os.environ.get("APPDATA") or Path.home())
+    config_dir = appdata / "VTUResultsUtility"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir / "config.json"
+
 
 W, H         = 700, 620
 BG           = "#f5f7fa"
@@ -171,11 +180,14 @@ def _save_excel(
     wb = Workbook()
 
     def _write_title_block(ws, title_text: str, n_cols: int):
-        for r_i, (text, fsize, row_h) in enumerate([
+        faculty_text = cfg.get("faculty_incharge", "").strip()
+        title_rows = [
             (cfg["inst_name"], 14, 24),
             (cfg["dept_name"], 11, 20),
             (title_text, 11, 20),
-        ], 1):
+            (f"Faculty In-charge: {faculty_text}" if faculty_text else "", 10, 16),
+        ]
+        for r_i, (text, fsize, row_h) in enumerate(title_rows, 1):
             ws.merge_cells(start_row=r_i, start_column=1, end_row=r_i, end_column=n_cols)
             c = ws.cell(r_i, 1, text)
             c.fill = white_fill
@@ -270,7 +282,7 @@ def _save_excel(
 
     ws = wb.active
     ws.title = "Result Sheet"
-    DATA_ROW = 6
+    DATA_ROW = 7
     COL_S0 = 4
     col_total = COL_S0 + n_subj * 3
     col_pct = col_total + 1
@@ -280,14 +292,14 @@ def _save_excel(
     _write_title_block(ws, _result_sheet_title(cfg), n_cols)
 
     for col, text in [(COL_SNO, "S.No"), (COL_USN, "USN"), (COL_NAME, "STUDENT NAME")]:
-        ws.merge_cells(start_row=4, start_column=col, end_row=5, end_column=col)
-        c = ws.cell(4, col, text)
+        ws.merge_cells(start_row=5, start_column=col, end_row=6, end_column=col)
+        c = ws.cell(5, col, text)
         c.fill = white_fill; c.font = hdr_font; c.alignment = hdr_align; c.border = thin
 
     for i, code in enumerate(all_codes):
         c0 = COL_S0 + i * 3
-        ws.merge_cells(start_row=4, start_column=c0, end_row=4, end_column=c0 + 2)
-        c = ws.cell(4, c0, code)
+        ws.merge_cells(start_row=5, start_column=c0, end_row=5, end_column=c0 + 2)
+        c = ws.cell(5, c0, code)
         c.fill = white_fill; c.font = hdr_font; c.alignment = hdr_align; c.border = thin
 
     for col, text in [
@@ -295,17 +307,17 @@ def _save_excel(
         (col_pct, "%"),
         (col_fail, "Total no.\nof Fail"),
     ]:
-        ws.merge_cells(start_row=4, start_column=col, end_row=5, end_column=col)
-        c = ws.cell(4, col, text)
+        ws.merge_cells(start_row=5, start_column=col, end_row=6, end_column=col)
+        c = ws.cell(5, col, text)
         c.fill = white_fill; c.font = hdr_font; c.alignment = hdr_align; c.border = thin
-    ws.row_dimensions[4].height = 30
+    ws.row_dimensions[5].height = 30
 
     for i in range(n_subj):
         c0 = COL_S0 + i * 3
         for off, lbl in enumerate(("INT", "EXT", "TOT")):
-            c = ws.cell(5, c0 + off, lbl)
+            c = ws.cell(6, c0 + off, lbl)
             c.fill = white_fill; c.font = sub_font; c.alignment = ctr_align; c.border = thin
-    ws.row_dimensions[5].height = 16
+    ws.row_dimensions[6].height = 16
 
     tot_cols = [COL_S0 + i * 3 + 2 for i in range(n_subj)]
 
@@ -387,7 +399,7 @@ def _save_excel(
     ws.freeze_panes = f"D{DATA_ROW}"
 
     ws_credit = wb.create_sheet("Credit Sheet")
-    C_DATA_ROW = 6
+    C_DATA_ROW = 7
     C_COL_S0 = 4
     c_col_total_cp = C_COL_S0 + n_subj * 3
     c_col_sgpa = c_col_total_cp + 1
@@ -400,14 +412,14 @@ def _save_excel(
     _write_title_block(ws_credit, _credit_sheet_title(cfg), c_n_cols)
 
     for col, text in [(COL_SNO, "S.No"), (COL_USN, "USN"), (COL_NAME, "STUDENT NAME")]:
-        ws_credit.merge_cells(start_row=4, start_column=col, end_row=5, end_column=col)
-        c = ws_credit.cell(4, col, text)
+        ws_credit.merge_cells(start_row=5, start_column=col, end_row=6, end_column=col)
+        c = ws_credit.cell(5, col, text)
         c.fill = white_fill; c.font = hdr_font; c.alignment = hdr_align; c.border = thin
 
     for i, code in enumerate(all_codes):
         c0 = C_COL_S0 + i * 3
-        ws_credit.merge_cells(start_row=4, start_column=c0, end_row=4, end_column=c0 + 2)
-        c = ws_credit.cell(4, c0, code)
+        ws_credit.merge_cells(start_row=5, start_column=c0, end_row=5, end_column=c0 + 2)
+        c = ws_credit.cell(5, c0, code)
         c.fill = white_fill; c.font = hdr_font; c.alignment = hdr_align; c.border = thin
 
     for col, text in [
@@ -417,17 +429,17 @@ def _save_excel(
         (c_col_backlogs, "No. of Backlogs"),
         (c_col_pct, "Percentage"),
     ]:
-        ws_credit.merge_cells(start_row=4, start_column=col, end_row=5, end_column=col)
-        c = ws_credit.cell(4, col, text)
+        ws_credit.merge_cells(start_row=5, start_column=col, end_row=6, end_column=col)
+        c = ws_credit.cell(5, col, text)
         c.fill = white_fill; c.font = hdr_font; c.alignment = hdr_align; c.border = thin
-    ws_credit.row_dimensions[4].height = 30
+    ws_credit.row_dimensions[5].height = 30
 
     for i in range(n_subj):
         c0 = C_COL_S0 + i * 3
         for off, lbl in enumerate(("TOT", "GP", "CP")):
-            c = ws_credit.cell(5, c0 + off, lbl)
+            c = ws_credit.cell(6, c0 + off, lbl)
             c.fill = white_fill; c.font = sub_font; c.alignment = ctr_align; c.border = thin
-    ws_credit.row_dimensions[5].height = 16
+    ws_credit.row_dimensions[6].height = 16
 
     credit_tot_cols = [C_COL_S0 + i * 3 for i in range(n_subj)]
     credit_gp_cols = [C_COL_S0 + i * 3 + 1 for i in range(n_subj)]
@@ -585,7 +597,9 @@ class VTUParserApp(tk.Frame):
             "year_period": tk.StringVar(value=YEAR_PERIOD_DEFAULT),
             "reval_status": tk.StringVar(value=REVAL_DEFAULT),
             "semester": tk.StringVar(value=SEM_DEFAULT),
+            "faculty_incharge": tk.StringVar(value=""),
         }
+        self._load_config()
 
         self._build_ui()
         self._set_main_controls_enabled(True)
@@ -727,8 +741,18 @@ class VTUParserApp(tk.Frame):
         )
         reval_box.grid(row=2, column=3, sticky="w", padx=(0, 14), pady=(4, 8))
        
-        tk.Label(cfg_card, text="Semester", font=F_SMALL, bg=CARD, fg=T_MID).grid(row=3, column=0, sticky="w", padx=(14, 6), pady=(4, 12))
-        ttk.Entry(cfg_card, textvariable=self._cfg_vars["semester"], font=F_BODY, width=10).grid(row=3, column=1, sticky="w", padx=(0, 14), pady=(4, 12))
+        tk.Label(cfg_card, text="Semester", font=F_SMALL, bg=CARD, fg=T_MID).grid(row=3, column=0, sticky="w", padx=(14, 6), pady=(4, 4))
+        ttk.Entry(cfg_card, textvariable=self._cfg_vars["semester"], font=F_BODY, width=10).grid(row=3, column=1, sticky="w", padx=(0, 14), pady=(4, 4))
+
+        tk.Label(cfg_card, text="Faculty In-charge", font=F_SMALL, bg=CARD, fg=T_MID).grid(row=3, column=2, sticky="w", padx=(6, 6), pady=(4, 4))
+        ttk.Entry(cfg_card, textvariable=self._cfg_vars["faculty_incharge"], font=F_BODY, width=28).grid(row=3, column=3, sticky="w", padx=(0, 14), pady=(4, 4))
+
+        tk.Button(
+            cfg_card, text="  Save  ", font=F_SMALL,
+            bg=ACCENT, fg="white", activebackground=ACCENT_DK, activeforeground="white",
+            bd=0, padx=12, pady=4, relief="flat", cursor="hand2",
+            command=self._save_config,
+        ).grid(row=4, column=0, columnspan=4, sticky="e", padx=14, pady=(4, 10))
 
         self._progress_var = tk.DoubleVar(value=0)
         style = ttk.Style(self)
@@ -1109,6 +1133,7 @@ class VTUParserApp(tk.Frame):
             "year_period": self._cfg_vars["year_period"].get().strip(),
             "reval_status": self._cfg_vars["reval_status"].get().strip(),
             "semester": self._cfg_vars["semester"].get().strip(),
+            "faculty_incharge": self._cfg_vars["faculty_incharge"].get().strip(),
         }
         for key, label in [
             ("inst_name", "College"),
@@ -1240,7 +1265,7 @@ class VTUParserApp(tk.Frame):
             self._q.put(("log", f"\nCould not write Excel: {exc}", "err"))
             self._q.put(("done_err", None))
 
-    def _prompt_subject_credits(self, subjects: list[str]) -> tuple[dict[str, int], list[str], dict[str, str], dict[str, bool]] | None:
+    def _prompt_subject_credits(self, subjects: list[str], auto_disable_highlight: set | None = None) -> tuple[dict[str, int], list[str], dict[str, str], dict[str, bool]] | None:
         dlg = tk.Toplevel(self)
         dlg.title("Subject Credits")
         dlg.configure(bg=BG)
@@ -1357,7 +1382,7 @@ class VTUParserApp(tk.Frame):
         for code in ordered_subjects:
             credits_vars[code] = tk.StringVar(value=str(self._last_credits.get(code, "")))
             selected_vars[code] = tk.BooleanVar(value=False)
-            highlight_vars[code] = tk.BooleanVar(value=True)
+            highlight_vars[code] = tk.BooleanVar(value=code not in (auto_disable_highlight or set()))
 
         def _focus_credit(code: str, delta: int):
             idx = ordered_subjects.index(code)
@@ -1515,7 +1540,20 @@ class VTUParserApp(tk.Frame):
                         self._q.put(("done_cancel", None))
                         continue
                     payload = item[1]
-                    picked = self._prompt_subject_credits(payload["subjects"])
+                    # Detect subjects where every student has external == 0 (exam not conducted)
+                    _subj_ext: dict[str, list[int]] = {}
+                    for _r in payload["rows"]:
+                        _code = _r.get("Subject Code", "")
+                        if not _code:
+                            continue
+                        try:
+                            _subj_ext.setdefault(_code, []).append(int(_r.get("External", "")))
+                        except (ValueError, TypeError):
+                            pass
+                    auto_disable = {
+                        c for c, vals in _subj_ext.items() if vals and all(v == 0 for v in vals)
+                    }
+                    picked = self._prompt_subject_credits(payload["subjects"], auto_disable)
                     if not picked:
                         self._log_msg("\nExport cancelled: credits were not provided.", "err")
                         self._busy = False
@@ -1580,6 +1618,29 @@ class VTUParserApp(tk.Frame):
             return False
         return True
 
+
+    def _load_config(self):
+        path = _get_config_path()
+        if not path.exists():
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for key in ("inst_name", "dept_name", "year_period", "reval_status", "semester", "faculty_incharge"):
+                if key in data and key in self._cfg_vars:
+                    self._cfg_vars[key].set(str(data[key]))
+        except Exception:
+            pass
+
+    def _save_config(self):
+        path = _get_config_path()
+        try:
+            data = {key: var.get().strip() for key, var in self._cfg_vars.items()}
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            self._log_msg("Configuration saved.", "ok")
+        except Exception as exc:
+            messagebox.showerror("Save Failed", f"Could not save configuration:\n{exc}")
 
     def _log_msg(self, text: str, tag: str = "info"):
         try:

@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import tempfile
 import base64
 import threading
 import ctypes
@@ -133,6 +134,14 @@ def solve_captcha(img_path):
     if len(prediction) > 6:
         prediction = prediction[:6]
     return prediction
+
+
+def create_temp_captcha_path(usn, attempt):
+    # Use a unique path in the OS temp folder so packaged installs never read/write bundled files.
+    safe_usn = "".join(ch for ch in str(usn) if ch.isalnum()) or "usn"
+    stamp = int(time.time() * 1000)
+    filename = f"vtu_captcha_{safe_usn}_{attempt}_{stamp}.png"
+    return os.path.join(tempfile.gettempdir(), filename)
 
 def save_as_pdf(driver, usn, output_dir):
     if not os.path.exists(output_dir):
@@ -275,16 +284,23 @@ def scraper_worker(usn_list, mode, target_url, output_dir, gui_app):
                 submit_btn = driver.find_element(By.ID, "submit")
                 captcha_img = driver.find_element(By.XPATH, "//img[contains(@src, 'captcha')]")
                 
-                captcha_path = "current_captcha.png"
-                captcha_img.screenshot(captcha_path)
-                
-                if mode == "Auto":
-                    predicted_code = solve_captcha(captcha_path)
-                    gui_app.update_log(f"[{usn}] Automatic Guess: {predicted_code}")
-                else:
-                    predicted_code = gui_app.request_manual_captcha(captcha_path)
-                    if predicted_code is None:
-                        break
+                captcha_path = create_temp_captcha_path(usn, attempts)
+                try:
+                    captcha_img.screenshot(captcha_path)
+
+                    if mode == "Auto":
+                        predicted_code = solve_captcha(captcha_path)
+                        gui_app.update_log(f"[{usn}] Automatic Guess: {predicted_code}")
+                    else:
+                        predicted_code = gui_app.request_manual_captcha(captcha_path)
+                        if predicted_code is None:
+                            break
+                finally:
+                    try:
+                        if os.path.exists(captcha_path):
+                            os.remove(captcha_path)
+                    except OSError:
+                        pass
 
                 usn_box.clear()
                 usn_box.send_keys(usn)
