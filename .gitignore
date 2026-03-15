@@ -1,0 +1,8 @@
+\__pycache__
+\.venv
+\.venv_release
+\build
+\dist
+\model
+\current_captcha.png
+*.spec
